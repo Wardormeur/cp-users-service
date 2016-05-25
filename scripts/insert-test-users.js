@@ -5,6 +5,7 @@ var config = require('../config/config.js')();
 
 var seneca = require('seneca')();
 
+
 var argv = require('optimist')
   .boolean('d')
   .alias('d', 'withcleanup')
@@ -17,11 +18,16 @@ seneca.use('postgresql-store');
 
 seneca
   .use('user')
+  .use('../users.js')
   .use('../profiles.js')
-  .use(require('../test/lib/test-user-data.js'));
+  .use(require('../test/lib/test-user-data.js'))
+  .listen()
+  .client({ type: 'web', port: 10301, pin: 'role:cd-dojos,cmd:*' })
+
+  .client({ type: 'web', port: 10301, pin: 'role:test-dojo-data,cmd:*' });
+
 
 seneca.ready(function() {
-
   function docleanup(done) {
     if (argv.withcleanup) {
       seneca.act({ role: 'test-user-data', cmd: 'clean', timeout: false }, done);
@@ -31,18 +37,9 @@ seneca.ready(function() {
     }
   }
 
-  docleanup(function(err) {
-    seneca.act({ role: 'test-user-data', cmd: 'insert', timeout: false }, function (err) {
-      if (err) {
-        console.log('insert test-user-data failed:', err);
-      }
-      else {
-        console.log('test-user-data inserted successfully');
-      }
-
-      seneca.close(function(){
-        process.exit();
-      });
-    });
+  docleanup( function () {
+    console.log('Service cleaned');
+    console.log('Service ready for initialization');
+    seneca.act({ role: 'test-user-data', cmd: 'init'});
   });
 });

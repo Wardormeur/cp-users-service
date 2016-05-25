@@ -6,6 +6,7 @@ var async = require('async');
 module.exports = function (options) {
   var seneca = this;
   var plugin = 'test-user-data';
+  //  TODO : use fixtures
   var users = [
     { nick: 'admin@example.com', name: 'Admin', email: 'admin@example.com', password: 'test', roles: ['cdf-admin'], initUserType: { name: 'champion'}},
     { nick: 'manager@example.com', name: 'Manager', email: 'manager@example.com', password: 'test', roles: ['cdf-admin'], initUserType: {name:  'champion'}},
@@ -33,9 +34,10 @@ module.exports = function (options) {
 
   seneca.add({ role: plugin, cmd: 'insert' }, function (args, done) {
 
+    console.log('Starting insert user');
     var userpin = seneca.pin({ role: 'user', cmd: '*' });
 
-    var registerusers = function (done) {
+    var registerUsers = function (done) {
       async.forEachOfSeries(users, function(user, index, cb){
         userpin.register(user, function(err, response){
           if (err) return done(err);
@@ -83,7 +85,7 @@ module.exports = function (options) {
                 if (err) return done(err);
 
                 if(_.isEmpty(parentProfile.children)) parentProfile.children = [];
-                parentProfile.children.push(childProfile);
+                parentProfile.children.push(childProfile.userId);
                 seneca.act({role:'cd-profiles', cmd:'save', profile: parentProfile}, doneParent);
               });
             }, cb)
@@ -93,7 +95,7 @@ module.exports = function (options) {
     };
 
     async.series([
-      registerusers,
+      registerUsers,
       registerKids
     ], done);
 
@@ -102,14 +104,31 @@ module.exports = function (options) {
   seneca.add({ role: plugin, cmd: 'clean' }, function (args, done) {
     var userpin = seneca.pin({ role: 'user', cmd: '*' });
 
-    var deleteusers = function (done) {
+    var deleteUsers = function (done) {
       async.eachSeries(users, userpin.delete, done);
     };
 
     async.series([
-      deleteusers
+      deleteUsers,
+
     ], done);
   });
+
+  seneca.add({ role: plugin, cmd: 'init'}, function (args, done) {
+    seneca.act({ role: plugin, cmd: 'insert', timeout: false}, function(err, response){
+      if (err) return done(err);
+      console.log('Sending init to next service');
+      seneca.act({ role: 'test-dojo-data', cmd: 'insert', timeout: false, ungate: true});
+      done();
+    });
+  });
+
+  seneca.add({ role: plugin, cmd: 'done'}, function (args, done){
+      console.log('Stopping user service');
+      seneca.close();
+      process.exit();
+  });
+
 
   return {
     name: plugin
